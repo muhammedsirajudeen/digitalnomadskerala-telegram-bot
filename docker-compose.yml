@@ -1,0 +1,14 @@
+services:
+  bot:
+    container_name: nomad-bot
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    networks:
+      - nomad
+    env_file:
+      - .env
+
+networks:
+  nomad:
+    driver: bridge
