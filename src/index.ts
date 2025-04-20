@@ -16,6 +16,10 @@ if (!GROUP_ID) {
 if (!THREAD_ID) {
     throw new Error('Set the thread id in env')
 }
+if (!isWithinISTWorkingHours()) {
+    console.log('\x1b[33m%s\x1b[0m', 'Within bounds of 8 A.M to 8 P.M');
+    process.exit(0)
+}
 
 const bot = new TelegramBot(token, { polling: true })
 
@@ -52,6 +56,19 @@ async function fetchJob() {
     }
 }
 
+function isWithinISTWorkingHours(): boolean {
+    const now = new Date();
+
+    // Convert UTC to IST (+5:30)
+    const istOffset = 5.5 * 60; // in minutes
+    const utcTime = now.getTime() + now.getTimezoneOffset() * 60000;
+    const istTime = new Date(utcTime + istOffset * 60000);
+
+    const hour = istTime.getHours();
+    return hour >= 8 && hour < 20; // Between 8 AM and 8 PM IST
+}
+
+
 async function sendJobs() {
     const jobs = await fetchJob();
     if (!jobs) {
@@ -61,25 +78,33 @@ async function sendJobs() {
     if (filteredJobs.length === 0) {
         return
     }
-    const job = filteredJobs[0]
-    console.log('\x1b[33m%s\x1b[0m', 'The job to send is', '\x1b[37m', job, '\x1b[0m');
-    const message = `
-    📌 *${job.title}*  
-    🏢 *Company:* ${job.company_name}  
-    🌍 *Location:* ${job.candidate_required_location}  
-    💼 *Category:* ${job.category}  
-    💰 *Salary:* ${job.salary || 'Not specified'}  
-    🕒 *Published on:* ${new Date(job.publication_date).toLocaleDateString()}  
-    
-    🔗 [View Job Posting](${job.url})
-            `;
-    try {
-        bot.sendMessage(GROUP_ID, message, {
-            message_thread_id: THREAD_ID,
-            parse_mode: 'Markdown',
-        });
-    } catch (error) {
-        console.error('\x1b[31m%s\x1b[0m', 'Error in sending message to telegram group');
+    let count = 0
+    for (const job of filteredJobs) {
+        const message = `
+        📌 *${job.title}*  
+        🏢 *Company:* ${job.company_name}  
+        🌍 *Location:* ${job.candidate_required_location}  
+        💼 *Category:* ${job.category}  
+        💰 *Salary:* ${job.salary || 'Not specified'}  
+        🕒 *Published on:* ${new Date(job.publication_date).toLocaleDateString()}  
+        
+        🔗 [View Job Posting](${job.url})
+                `;
+        try {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            bot.sendMessage(GROUP_ID, message, {
+                message_thread_id: THREAD_ID,
+                parse_mode: 'Markdown',
+                disable_notification: true
+            });
+            count++
+            if (count === 5) {
+                console.log(`Finished sending ${count} Messages`)
+                process.exit(0)
+            }
+        } catch (error) {
+            console.error('\x1b[31m%s\x1b[0m', 'Error in sending message to telegram group');
+        }
     }
 }
 
